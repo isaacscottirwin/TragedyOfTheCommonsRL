@@ -11,24 +11,27 @@ class CommonsEnv:
     - Each agent receives reward = amount it extracts.
     - No explicit cooperation reward or penalty.
     """
-    def __init__(self, num_agents, resource_max, resource_regen_rate, max_extract):
+    def __init__(self, num_agents=5, resource_max=100, resource_regen_rate=0.05, max_extract=5, max_steps=200):
         """
         Parameters:
             num_agents (int): number of agents in the environment.
             R_max (float): maximum capacity of the shared resource.
             regen_rate (float): logistic growth rate of the resource.
             max_extract (float): maximum a single agent can extract in a step.
+            max_steps (int): hard cap on episode length to prevent endless loops.
         """
         self.num_agents = num_agents
         self.resource_max = resource_max
         self.resource_regen_rate = resource_regen_rate
         self.max_extract = max_extract
+        self.max_steps = max_steps
 
         self.reset()
 
     def reset(self):
         """Reset the environment to its initial state."""
         self.resource = self.resource_max  # Start full
+        self.step_count = 0
         # Return initial observations for each agent
         obs = {i: self._get_obs(i) for i in range(self.num_agents)}
         return obs
@@ -71,14 +74,16 @@ class CommonsEnv:
         self.resource = self.resource + self.resource_regen_rate * self.resource *(1 - self.resource / self.resource_max) - total_taken
 
         # clip resource to be between 0 and resource_max resource cannot be less than 0
-        self.R = np.clip(self.R, 0, self.R_max)
+        self.resource = np.clip(self.resource, 0, self.resource_max)
 
-        done = bool(self.resource == 0)
+        self.step_count += 1
+
+        # Episode ends if resource collapses or we hit the step limit (prevents infinite loops)
+        done = bool(self.resource <= 0 or self.step_count >= self.max_steps)
 
         # Produce new observations
         next_obs = {i: self._get_obs(i) for i in actions}
 
         return next_obs, rewards, done, {}
-
 
 
