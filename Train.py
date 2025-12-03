@@ -4,18 +4,20 @@ from IacAgent import IacAgent
 from PpoAgent import PpoAgent
 
 hyperparameters = {
-    "learning_rate": 3e-4,
-    "resource_regen_rate": 0.1,
     "resource_max": 200,
-    "max_extract": 1.0,
-    "gamma": 0.5,
+    "resource_regen_rate": 0.05, 
+    "max_extract": 1.5, 
+    "max_steps": 300,
+    "collapse_penalty": 90.0,
+    "penalty_ramp_episodes": 50, 
+    "penalty_scale": 1.0,
+    "scale_bonus": 60,
+    "learning_rate": 3e-4,
+    "gamma": 0.99,
     "lambda": 0.95,
-    "max_steps": 200,
-    # reward shaping to discourage collapse without wiping out learning
-    "collapse_penalty": 10.0,
-    "scarcity_threshold": 0.2,
-    "scarcity_penalty": 1.0,
-    "penalty_ramp_episodes": 50,  # allow early over-exploitation, then ramp penalties
+    "clip_eps": 0.2,
+    "train_iters": 10
+    
 }
 
 def trainIac():
@@ -27,16 +29,18 @@ def trainIac():
         max_extract=hyperparameters.get("max_extract"),
         max_steps=hyperparameters.get("max_steps"),
         collapse_penalty=hyperparameters.get("collapse_penalty"),
-        scarcity_threshold=hyperparameters.get("scarcity_threshold"),
-        scarcity_penalty=hyperparameters.get("scarcity_penalty"),
         penalty_ramp_episodes=hyperparameters.get("penalty_ramp_episodes"),
+        penalty_scale=hyperparameters.get("penalty_scale"),
+        scale_bonus=hyperparameters.get("scale_bonus")
+
+        
     )
 
     # Create an IAC agent for each agent in the environment
     agents = {i: IacAgent(obs_dim=1, lr = hyperparameters.get("learning_rate"), 
             gamma=hyperparameters.get("gamma")) for i in range(num_agents)}
 
-    num_episodes = 100
+    num_episodes = 300
     resource_over_episodes = []
     agent_reward_per_episode = {i: [] for i in range(num_agents)}
 
@@ -98,16 +102,21 @@ def trainPpo():
         max_extract=hyperparameters.get("max_extract"),
         max_steps=hyperparameters.get("max_steps"),
         collapse_penalty=hyperparameters.get("collapse_penalty"),
-        scarcity_threshold=hyperparameters.get("scarcity_threshold"),
-        scarcity_penalty=hyperparameters.get("scarcity_penalty"),
         penalty_ramp_episodes=hyperparameters.get("penalty_ramp_episodes"),
+        penalty_scale=hyperparameters.get("penalty_scale"),
+        scale_bonus=hyperparameters.get("scale_bonus")
+
+        
     )
 
     agents = {i: PpoAgent(
                     obs_dim=1,
                     lr=hyperparameters.get("learning_rate"),
                     gamma=hyperparameters.get("gamma"),
-                    lam=hyperparameters.get("lambda"))
+                    lam=hyperparameters.get("lambda"),
+                    clip_eps=hyperparameters.get("clip_eps"),
+                    train_iters=hyperparameters.get("train_iters")
+                    )
               for i in range(num_agents)}
 
     num_episodes = 300

@@ -12,9 +12,9 @@ class CommonsEnv:
     - No explicit cooperation reward or penalty.
     """
     def __init__(self, num_agents=5, resource_max=100, resource_regen_rate=0.05, max_extract=5, max_steps=200,
-                 collapse_penalty=50.0, scarcity_threshold=0.3, scarcity_penalty=5.0, penalty_ramp_episodes=50):
+                 collapse_penalty=100.0, penalty_ramp_episodes=50, penalty_scale = 1.0, scale_bonus = 30):
         """
-        Parameters:
+        # Parameters:
             num_agents (int): number of agents in the environment.
             R_max (float): maximum capacity of the shared resource.
             regen_rate (float): logistic growth rate of the resource.
@@ -31,10 +31,10 @@ class CommonsEnv:
         self.max_extract = max_extract
         self.max_steps = max_steps
         self.collapse_penalty = collapse_penalty
-        self.scarcity_threshold = scarcity_threshold
-        self.scarcity_penalty = scarcity_penalty
         self.penalty_ramp_episodes = penalty_ramp_episodes
-        self.penalty_scale = 1.0
+        self.penalty_scale = penalty_scale
+        self.scale_bonus = scale_bonus
+        self.prev_resource = None
 
         self.reset()
 
@@ -42,6 +42,7 @@ class CommonsEnv:
         """Reset the environment to its initial state."""
         self.resource = self.resource_max  # Start full
         self.step_count = 0
+        self.prev_resource = self.resource
         # Linearly ramp penalty strength over initial episodes to allow early over-exploitation
         if self.penalty_ramp_episodes > 0:
             self.penalty_scale = min(1.0, episode_idx / float(self.penalty_ramp_episodes))
@@ -59,55 +60,55 @@ class CommonsEnv:
         return np.array([self.resource / self.resource_max], dtype=np.float32)
     
     def step(self, actions):
-        """
-        Apply actions and update the environment.
 
-        Parameters:
-            actions (dict):
-                Keys = agent IDs
-                Values = action in [0,1] (fraction of max_extract)
-
-        Returns:
-            next_obs (dict): next observation per agent
-            rewards (dict): reward per agent (equal to extraction)
-            done (bool): episode termination flag
-            info (dict): extra info (unused)
-        """
-        # Convert normalized actions to actual extraction amounts
+        # Convert actions 0-1 → extraction amount
         actions = {i: float(np.clip(actions[i], 0, 1)) * self.max_extract
-            for i in actions}
+                for i in actions}
 
-        # calculate rewards
+        # Base reward = extraction
         rewards = {i: actions[i] for i in actions}
-
-        #total resources taken
+        
         total_taken = sum(actions.values())
 
-        # update resource using logistic growth
-        # logistic growth formula: resource = resource + regen_rate * resource *(1 - resource / resource_max) - total_taken
-        # where resource is the current resource, regen_rate is the growth rate, and total_taken is the total resources taken
-        self.resource = self.resource + self.resource_regen_rate * self.resource *(1 - self.resource / self.resource_max) - total_taken
-
-        # clip resource to be between 0 and resource_max resource cannot be less than 0
+        # Logistic growth
+        self.resource = (
+            self.resource
+            + self.resource_regen_rate * self.resource * (1 - self.resource / self.resource_max)
+            - total_taken
+        )
         self.resource = np.clip(self.resource, 0, self.resource_max)
 
-        # Per-step penalty when the resource is scarce (shapes the reward away from greed)
-        resource_frac = self.resource / self.resource_max
-        if resource_frac < self.scarcity_threshold:
-            scarcity_cost = self.penalty_scale * self.scarcity_penalty * (self.scarcity_threshold - resource_frac)
-            rewards = {i: r - scarcity_cost for i, r in rewards.items()}
+        # compute resource derivative
+        delta_R = self.resource - self.prev_resource
+        self.prev_resource = self.resource   
 
-        # major penalty if resource goes to 0
-        collapsed = self.resource <= 0
+        if delta_R < 0:
+            for i in rewards:
+                rewards[i] += 3.0 * delta_R
+
+        # did evn collapse
+        collapsed = self.resource <=1.0
+
         if collapsed:
-            rewards = {i: -self.penalty_scale * self.collapse_penalty for i in rewards}
-
+            # Immediate collapse penalty; no extraction reward allowed
+            rewards = {i: -self.penalty_scale * self.collapse_penalty for i in actions}
+            return {i: self._get_obs(i) for i in actions}, rewards, True, {}
+        
+        # increase step
         self.step_count += 1
+        reached_hoizon = self.step_count >= self.max_steps    
+        
+        # if episode has reached horizon
+        if reached_hoizon:
+            resource_bonus = float(self.resource/self.resource_max)
 
-        # Episode ends if resource collapses or we hit the step limit (prevents infinite loops)
-        done = bool(collapsed or self.step_count >= self.max_steps)
+            rewards = { i: rewards[i] + self.scale_bonus * self.penalty_scale * resource_bonus
+                        for i in rewards            }
+            done = True
+            next_obs = {i : self._get_obs(i) for i in actions}
+            return next_obs, rewards, done, {}
 
-        # Produce new observations
+        # otherwise continue
+        done = False
         next_obs = {i: self._get_obs(i) for i in actions}
-
         return next_obs, rewards, done, {}

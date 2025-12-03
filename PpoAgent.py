@@ -23,7 +23,6 @@ class PpoAgent:
         self.lam = lam
         self.clip_eps = clip_eps
         self.train_iters = train_iters
-
         self.ac = ActorCritic(obs_dim)
         self.optimizer = optim.Adam(self.ac.parameters(), lr=lr)
 
