@@ -1,0 +1,160 @@
+import numpy as np
+
+
+class TocEnv:
+    """
+    Pure Python ToC environment (discrete actions):
+      - One RL agent
+      - K non-agents
+      - Random turn order each step
+      - observation vector [current_resource, num_agents_before, total_agents]
+      - Logistic regeneration
+      - Reward: to be implemented
+            
+    """
+
+    def __init__(
+        self,
+        K=5,
+        resource_max=100,
+        regen_rate=0.35,
+        max_agent_take=4,
+        max_nonagent_take=2.5,
+        survival_min_take=1.0,
+        num_actions=6,
+        rng=None,
+    ):
+
+        self.K = K
+        self.resource_max = resource_max
+        self.regen_rate = regen_rate
+        self.max_agent_take = max_agent_take
+        self.max_nonagent_take = max_nonagent_take
+        self.survival_min_take = survival_min_take
+
+        if num_actions < 2:
+            raise ValueError("num_actions must be >= 2")
+
+        self.num_actions = num_actions
+        self.action_fracs = np.linspace(0.0, 1.0, num_actions)
+        # per-environment RNG for reproducibility
+        self.rng = rng if rng is not None else np.random.default_rng()
+
+        self.reset()
+
+    def reset(self):
+        self.resource = float(self.resource_max)
+        self.num_before = 0
+        return self._get_obs()
+
+    def _action(self, action_index):
+        """Convert discrete action index to extraction amount."""
+        if not (0 <= action_index < self.num_actions):
+            raise ValueError(f"Action {action_index} is out of range.")
+
+        return self.action_fracs[action_index] * self.max_agent_take
+
+    def _reward(self, agent_action = None):
+        """
+        Computes the reward and returns (reward, done).
+        - If agent_action < survival_min_take -> starvation
+        - If resource <= 0 -> collapse
+        - Otherwise survival reward
+        """
+        ## todo implement your reward function here. 
+        ## the reward function I implemented was
+        ## very simple, the comments above are kinda
+        ## a hint
+
+        # if you want to play around with the reward function,
+        # I think it would be cool to see what different behaviors
+        # emerge
+    
+    def logistic_regen(self):
+        """
+        formula for updating resource level, models renewable resources
+        """
+        return self.regen_rate * self.resource * (1 - self.resource/self.resource_max)
+
+    def step(self, action_index):
+        """
+        This is the step function, there is a lot of randomness
+        that is why there is a ton of varience within the resource plots
+
+        1.
+        each non agent samples an action (amount of resoucres to consume)
+        randomly from 0 to max_non_agent_take
+        2.
+        The order of when the RL agent goes changes each episode
+        (thinking was it made environment more realistic but it may have
+        just complicated things)
+
+        hint: look at where I call the reward function method when your 
+        implmenting it
+
+        action_index: integer 0 .. num_actions-1
+        """
+        # random order (using per-env RNG for reproducibility)
+        order = list(range(self.K + 1))
+        self.rng.shuffle(order)
+
+        # visible non-agent takes (before agent acts)
+        self.num_before = 0
+
+        # process non-agents before agent
+        for p in order:
+            if p == self.K:
+                break # agents turn
+
+            take = float(self.rng.uniform(0, self.max_nonagent_take))
+            self.resource = max(0.0, self.resource - take)
+            self.num_before += 1
+
+            if self.resource <= 0:
+                reward, done = self._reward()
+                return self._end_step(reward, done)
+
+        # agent acts
+        action = self._action(action_index)
+
+        self.resource = max(0.0, self.resource - action)
+        if self.resource <= 0:
+            reward , done = self._reward(agent_action=action)
+            return self._end_step(reward, done)
+
+        # process non-agents after agent
+        after_agent = False
+        for p in order:
+            if p == self.K:
+                after_agent = True
+                continue
+            if after_agent:
+                take = float(self.rng.uniform(0, self.max_nonagent_take))
+                self.resource = max(0.0, self.resource - take)
+                if self.resource <= 0:
+                    reward, done = self._reward()
+                    return self._end_step(reward, done)
+
+        # regenerate resource (simple)
+        growth = self.logistic_regen()
+        self.resource = min(self.resource_max, max(0.0, self.resource + growth))
+
+        # final reward
+        reward, done = self._reward(agent_action=action)
+        return self._end_step(reward, done)
+
+    def _end_step(self, reward, done):
+        return self._get_obs(), reward, done
+
+    def _get_obs(self):
+        """
+        observation vector contains the 1. current amount of resorces left in the environment,
+        and 2. the number of agents that went before
+        
+        the problem is partially obersevable in the sense that the RL agent doesn't know how 
+        many more non-agents will consume resources after the RL agent does
+        """
+        return [self.resource, self.num_before]
+
+    def render(self):
+        print(f"Resource={self.resource:.2f}, visible takes={self.prev_nonagent_takes}")
