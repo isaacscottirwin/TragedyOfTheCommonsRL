@@ -24,9 +24,9 @@ def discretize_state(obs, env, num_buckets = 10):
 
 
 class Sarsa:
-    def __init__(self, env, episodes=7000, max_steps = 300, eta=0.5, gamma=0.99,
-                 epsilon=0.1, epsilon_decay=0.9995, epsilon_min=0.01,
-                 num_buckets=10):
+    def __init__(self, env, episodes=10000, max_steps=600, eta=0.04, gamma=0.99,
+                 epsilon=0.02, epsilon_decay=0.995, epsilon_min=0.005,
+                 num_buckets=15, rng=None):
         self.env = env
         self.episodes = episodes
         self.max_steps = max_steps
@@ -36,14 +36,15 @@ class Sarsa:
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.num_buckets = num_buckets
+        self.rng = rng if rng is not None else np.random.default_rng()
         
         self.q_values = defaultdict(lambda: np.zeros(env.num_actions))
         self.rewards_per_episode = []
         self.resource_per_episode = []
 
     def choose_action(self, state):
-        if np.random.rand() < self.epsilon:
-            return np.random.randint(self.env.num_actions)
+        if self.rng.random() < self.epsilon:
+            return self.rng.integers(self.env.num_actions)
         return np.argmax(self.q_values[state])
 
     def train(self):
@@ -54,13 +55,11 @@ class Sarsa:
 
             done = False
             total_reward = 0
-            resource_sum = 0
             steps = 0
 
-            while not done or steps <= self.max_steps:
+            while (not done) and (steps < self.max_steps):
                 next_obs, reward, done = self.env.step(action)
                 total_reward += reward
-                resource_sum += next_obs[0]
                 steps += 1
 
                 next_state = discretize_state(next_obs, self.env, self.num_buckets)
@@ -78,14 +77,15 @@ class Sarsa:
             self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
             self.rewards_per_episode.append(total_reward)
-            self.resource_per_episode.append(resource_sum / steps)
+            # Track resource at episode end
+            self.resource_per_episode.append(self.env.resource)
 
         return self.q_values, self.rewards_per_episode, self.resource_per_episode
 
 class Qlearning:
-    def __init__(self, env, episodes=7000, max_steps = 300, eta=0.5, gamma=0.99,
-                 epsilon=0.1, epsilon_decay=0.9995, epsilon_min=0.01,
-                 num_buckets=10):
+    def __init__(self, env, episodes=10000, max_steps=300, eta=0.04, gamma=0.99,
+                 epsilon=0.05, epsilon_decay=0.99, epsilon_min=0.01,
+                 num_buckets=15, rng=None):
         self.env = env
         self.episodes = episodes
         self.max_steps = max_steps 
@@ -95,14 +95,15 @@ class Qlearning:
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.num_buckets = num_buckets
+        self.rng = rng if rng is not None else np.random.default_rng()
 
         self.q_values = defaultdict(lambda: np.zeros(env.num_actions))
         self.rewards_per_episode = []
         self.resource_per_episode = []
 
     def choose_action(self, state):
-        if np.random.rand() < self.epsilon:
-            return np.random.randint(self.env.num_actions)
+        if self.rng.random() < self.epsilon:
+            return self.rng.integers(self.env.num_actions)
         return np.argmax(self.q_values[state])
 
     def train(self):
@@ -112,14 +113,12 @@ class Qlearning:
 
             done = False
             total_reward = 0
-            resource_sum = 0
             steps = 0
 
-            while not done or steps <= self.max_steps:
+            while (not done) and (steps < self.max_steps):
                 action = self.choose_action(state)
                 next_obs, reward, done = self.env.step(action)
                 total_reward += reward
-                resource_sum += next_obs[0]
                 steps += 1
 
                 next_state = discretize_state(next_obs, self.env, self.num_buckets)
@@ -135,12 +134,7 @@ class Qlearning:
             self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
             self.rewards_per_episode.append(total_reward)
-            self.resource_per_episode.append(resource_sum / steps)
+            # Track resource at episode end
+            self.resource_per_episode.append(self.env.resource)
 
         return self.q_values, self.rewards_per_episode, self.resource_per_episode
-
-
-
-
-
-

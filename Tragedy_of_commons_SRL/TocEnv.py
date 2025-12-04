@@ -16,13 +16,14 @@ class TocEnv:
 
     def __init__(
         self,
-        K=6,
+        K=5,
         resource_max=100,
-        regen_rate=0.25,
-        max_agent_take=5,
-        max_nonagent_take=3.5,
+        regen_rate=0.35,
+        max_agent_take=4,
+        max_nonagent_take=2.5,
         survival_min_take=1.0,
         num_actions=6,
+        rng=None,
     ):
 
         self.K = K
@@ -37,6 +38,8 @@ class TocEnv:
 
         self.num_actions = num_actions
         self.action_fracs = np.linspace(0.0, 1.0, num_actions)
+        # per-environment RNG for reproducibility
+        self.rng = rng if rng is not None else np.random.default_rng()
 
         self.reset()
 
@@ -75,9 +78,9 @@ class TocEnv:
         """
         action_index: integer 0 .. num_actions-1
         """
-        # random order
+        # random order (using per-env RNG for reproducibility)
         order = list(range(self.K + 1))
-        np.random.shuffle(order)
+        self.rng.shuffle(order)
 
         # visible non-agent takes (before agent acts)
         self.num_before = 0
@@ -87,7 +90,7 @@ class TocEnv:
             if p == self.K:
                 break # agents turn
 
-            take = float(np.random.uniform(0, self.max_nonagent_take))
+            take = float(self.rng.uniform(0, self.max_nonagent_take))
             self.resource = max(0.0, self.resource - take)
             self.num_before += 1
 
@@ -110,7 +113,7 @@ class TocEnv:
                 after_agent = True
                 continue
             if after_agent:
-                take = float(np.random.uniform(0, self.max_nonagent_take))
+                take = float(self.rng.uniform(0, self.max_nonagent_take))
                 self.resource = max(0.0, self.resource - take)
                 if self.resource <= 0:
                     reward, done = self._reward()
