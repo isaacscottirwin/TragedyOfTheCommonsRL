@@ -103,7 +103,7 @@ class CommonsEnv:
             resource_bonus = float(self.resource/self.resource_max)
 
             rewards = { i: rewards[i] + self.scale_bonus * self.penalty_scale * resource_bonus
-                        for i in rewards            }
+                        for i in rewards}
             done = True
             next_obs = {i : self._get_obs(i) for i in actions}
             return next_obs, rewards, done, {}

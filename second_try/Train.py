@@ -1,267 +1,218 @@
 import matplotlib.pyplot as plt
 import numpy as np
+
 from CommonsEnv import CommonsEnv
-from IacAgent import IacAgent
 from PpoAgent import PpoAgent
 
-hyperparameters = {
-    "resource_max": 200,
-    "resource_regen_rate": 0.05, 
-    "max_extract": 1.5, 
-    "max_steps": 300,
-    "collapse_penalty": 90.0,
-    "penalty_ramp_episodes": 50, 
-    "penalty_scale": 1.0,
-    "scale_bonus": 60,
-    "learning_rate": 3e-4,
+#HYPERPARAMETER CONFIG
+DEFAULT_CONFIG = {
+    "num_agents": 5,
+
+    # Environment params
+    "resource_max": 300,
+    # More forgiving dynamics to avoid constant collapse
+    "resource_regen_rate": 0.12,
+    "max_extract": 4.0,
+    # Allow any take to count toward reward
+    "min_extract": .3,
+    # Moderate horizon
+    "max_steps": 200,
+    # Penalties to discourage collapse, ramping in reasonably
+    "collapse_penalty": 40.0,
+    "penalty_ramp_episodes": 100,
+    "penalty_scale": 0.8,
+    # Modest end-of-episode bonus
+    "scale_bonus": 40,
+
+    # PPO params
+    "learning_rate": 5e-4,
     "gamma": 0.99,
     "lambda": 0.95,
     "clip_eps": 0.2,
-    "train_iters": 10
-    
+    "train_iters": 5,
+
+    # Training settings
+    "num_episodes": 300
 }
 
-def trainIac():
-    num_agents = 5
-    env = CommonsEnv(
-        num_agents=num_agents,
-        resource_max=hyperparameters.get("resource_max"),
-        resource_regen_rate=hyperparameters.get("resource_regen_rate"),
-        max_extract=hyperparameters.get("max_extract"),
-        max_steps=hyperparameters.get("max_steps"),
-        collapse_penalty=hyperparameters.get("collapse_penalty"),
-        penalty_ramp_episodes=hyperparameters.get("penalty_ramp_episodes"),
-        penalty_scale=hyperparameters.get("penalty_scale"),
-        scale_bonus=hyperparameters.get("scale_bonus")
-
-        
-    )
-
-    # Create an IAC agent for each agent in the environment
-    agents = {i: IacAgent(obs_dim=1, lr = hyperparameters.get("learning_rate"), 
-            gamma=hyperparameters.get("gamma")) for i in range(num_agents)}
-
-    num_episodes = 200
-    resource_over_episodes = []
-    agent_reward_per_episode = {i: [] for i in range(num_agents)}
 
 
-    for ep in range(num_episodes):
-        obs = env.reset(ep)
-        done = False
-        total_reward = 0
+# TRAINER CLASS
+class CommonsTrainer:
+    def __init__(self, config=DEFAULT_CONFIG):
+        self.config = config
+        self.num_agents = config["num_agents"]
 
-        # temp reward accumulator for this episode
-        episode_reward = {i: 0 for i in range(num_agents)}
+        # build environment + agents
+        self.env = self._build_env()
+        self.agents = self._build_agents()
 
-        while not done:
-            # Each agent chooses its action
-            actions = {}
-            raw_actions = {}
-            for i in agents:
-                act_out = agents[i].act(obs[i])  # exploration is default in the agent
-                if isinstance(act_out, tuple):
-                    act, raw_act = act_out
-                else:
-                    # backward compatibility: older act returned only a scalar
-                    act, raw_act = float(act_out), float(act_out)
-                actions[i] = act
-                raw_actions[i] = raw_act
+        # storage for metrics
+        self.resource_over_episodes = []
+        self.agent_rewards = {i: [] for i in range(self.num_agents)}
+        self.agent_actions = {i: [] for i in range(self.num_agents)}
+        self.delta_R_per_episode = []
+        self.total_reward_over_episodes = []
 
-            # Environment step
-            next_obs, rewards, done, _ = env.step(actions)
-
-            # Store transitions
-            for i in agents:
-                agents[i].store(
-                    obs[i], raw_actions[i], rewards[i], next_obs[i], done
-                )
-                # accumulate reward for this episode
-                episode_reward[i] += rewards[i]
-
-                total_reward += rewards[i]
-
-            obs = next_obs
-
-        # After each episode, update all agents
-        for i in agents:
-            agents[i].learn()
-            agent_reward_per_episode[i].append(episode_reward[i])
-        
-
-        resource_over_episodes.append(env.resource)
-        print(f"Episode {ep} | Total reward: {total_reward:.2f} | Resource: {env.resource:.2f}")
-    return resource_over_episodes, agent_reward_per_episode
-
-
-def trainPpo():
-    num_agents = 5
-    env = CommonsEnv(
-        num_agents=num_agents,
-        resource_max=hyperparameters.get("resource_max"),
-        resource_regen_rate=hyperparameters.get("resource_regen_rate"),
-        max_extract=hyperparameters.get("max_extract"),
-        max_steps=hyperparameters.get("max_steps"),
-        collapse_penalty=hyperparameters.get("collapse_penalty"),
-        penalty_ramp_episodes=hyperparameters.get("penalty_ramp_episodes"),
-        penalty_scale=hyperparameters.get("penalty_scale"),
-        scale_bonus=hyperparameters.get("scale_bonus")
-    )
-    agents = {i: PpoAgent(
-                    obs_dim=1,
-                    lr=hyperparameters.get("learning_rate"),
-                    gamma=hyperparameters.get("gamma"),
-                    lam=hyperparameters.get("lambda"),
-                    clip_eps=hyperparameters.get("clip_eps"),
-                    train_iters=hyperparameters.get("train_iters")
-                    )
-              for i in range(num_agents)}
-
-    num_episodes = 200
-    resource_over_episodes = []
-    agent_reward_per_episode = {i: [] for i in range(num_agents)}
-    agent_actions_per_episode = {i: [] for i in agents}
-    delta_R_per_episode = []
-
-    for ep in range(num_episodes):
-        obs = env.reset(ep)
-        done = False
-        total_reward = 0
-        episode_reward = {i: 0 for i in range(num_agents)}
-        episode_actions = {i: [] for i in range(num_agents)}
-        start_resource = env.resource
-
-        while not done:
-            actions = {}
-            step_info = {}
-
-            for i in agents:
-                act, raw_act, logp, val = agents[i].act(obs[i])
-                actions[i] = act
-                step_info[i] = (raw_act, logp, val)
-                episode_actions[i].append(act)
-
-            next_obs, rewards, done, _ = env.step(actions)
-
-            for i in agents:
-                raw_act, logp, val = step_info[i]
-                agents[i].store(
-                    obs=obs[i],
-                    raw_action=raw_act,
-                    logprob=logp,
-                    reward=rewards[i],
-                    value=val,
-                    done=done
-                )
-                episode_reward[i] += rewards[i]
-                total_reward += rewards[i]
-
-            obs = next_obs
-
-        for i in agents:
-            agents[i].finish_episode()
-            agent_reward_per_episode[i].append(episode_reward[i])
-            agent_actions_per_episode[i].append(episode_actions[i])
-
-        resource_over_episodes.append(env.resource)
-        delta_R = env.resource - start_resource
-        delta_R_per_episode.append(delta_R)
-        print(f"Episode {ep} | Total reward: {total_reward:.2f} | Resource: {env.resource:.2f}")
-
-    return resource_over_episodes, agent_reward_per_episode, delta_R_per_episode, agent_actions_per_episode
-
-    
-
-
-def plot_resource_pool(resource_over_episodes):
-    plt.figure(figsize=(8,4))
-    plt.plot(resource_over_episodes, label="Resource Level", color='green')
-    plt.xlabel("Episode")
-    plt.ylabel("Resource Level")
-    plt.title("Resource Level at End of Each Episode")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
-
-def plot_reward_per_agent(agent_reward_per_episode):
-    plt.figure(figsize=(10,5))
-
-    num_agents = len(agent_reward_per_episode)
-
-    for agent_id in range(num_agents):
-        plt.plot(
-            agent_reward_per_episode[agent_id],
-            label=f"Agent {agent_id}",
-            linewidth=2
+    # Environment + Agent Builders
+    def _build_env(self):
+        return CommonsEnv(
+            num_agents=self.config["num_agents"],
+            resource_max=self.config["resource_max"],
+            resource_regen_rate=self.config["resource_regen_rate"],
+            max_extract=self.config["max_extract"],
+            min_extract=self.config["min_extract"],
+            max_steps=self.config["max_steps"],
+            collapse_penalty=self.config["collapse_penalty"],
+            penalty_ramp_episodes=self.config["penalty_ramp_episodes"],
+            penalty_scale=self.config["penalty_scale"],
+            scale_bonus=self.config["scale_bonus"],
         )
 
-    plt.xlabel("Episode")
-    plt.ylabel("Total Reward Per Episode")
-    plt.title("Reward per Agent across Episodes")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
+    def _build_agents(self):
+        agents = {}
+        obs_dim = 3  # [R_norm, ΔR, prev_action]
 
-def plot_delta_resource(delta_R_per_episode):
-    plt.figure(figsize=(8,4))
-    plt.plot(delta_R_per_episode, color="purple", linewidth=2)
-    plt.xlabel("Episode")
-    plt.ylabel("ΔR")
-    plt.title("Resource Derivative per Episode")
-    plt.grid(True)
-    plt.show()
+        for i in range(self.num_agents):
+            agents[i] = PpoAgent(
+                obs_dim=obs_dim,
+                lr=self.config["learning_rate"],
+                gamma=self.config["gamma"],
+                lam=self.config["lambda"],
+                clip_eps=self.config["clip_eps"],
+                train_iters=self.config["train_iters"]
+            )
+        return agents
 
-def plot_reward_histograms(agent_reward_per_episode):
-    num_agents = len(agent_reward_per_episode)
-    plt.figure(figsize=(12,8))
+    # Main Training Loop
+    def train(self):
+        num_episodes = self.config["num_episodes"]
 
-    for agent_id in range(num_agents):
-        plt.hist(agent_reward_per_episode[agent_id], bins=40, alpha=0.5, label=f"Agent {agent_id}")
+        for ep in range(num_episodes):
+            obs = self.env.reset(ep)
+            done = False
 
-    plt.xlabel("Reward")
-    plt.ylabel("Frequency")
-    plt.title("Reward Distribution per Agent")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+            episode_reward = {i: 0 for i in range(self.num_agents)}
+            episode_actions = {i: [] for i in range(self.num_agents)}
+            start_resource = self.env.resource
 
-def plot_agent_correlation(agent_actions_per_episode):
-    # Convert to numpy matrix (agents × episodes)
-    data = []
-    for ag in agent_actions_per_episode:
-        avg_actions = [sum(ep)/len(ep) for ep in agent_actions_per_episode[ag]]
-        data.append(avg_actions)
+            while not done:
+                actions = {}
+                step_info = {}
 
-    data = np.array(data)   # shape (N_agents, N_episodes)
+                # Each agent takes one action
+                for i in self.agents:
+                    act, raw, logp, val = self.agents[i].act(obs[i])
+                    actions[i] = act
+                    step_info[i] = (raw, logp, val)
+                    episode_actions[i].append(act)
 
-    plt.figure(figsize=(6,5))
-    plt.imshow(np.corrcoef(data), cmap="viridis")
-    plt.colorbar(label="Correlation")
-    plt.title("Correlation of Extraction Behavior Between Agents")
-    plt.xticks(range(data.shape[0]), [f"A{i}" for i in range(data.shape[0])])
-    plt.yticks(range(data.shape[0]), [f"A{i}" for i in range(data.shape[0])])
-    plt.show()    
+                # Step environment
+                next_obs, rewards, done, _ = self.env.step(actions)
 
-def plot_average_extraction(agent_actions_per_episode):
-    plt.figure(figsize=(10,5))
-    num_agents = len(agent_actions_per_episode)
+                # Store transitions
+                for i in self.agents:
+                    raw, logp, val = step_info[i]
+                    self.agents[i].store(
+                        obs=obs[i],
+                        raw_action=raw,
+                        logprob=logp,
+                        reward=rewards[i],
+                        value=val,
+                        done=done
+                    )
+                    episode_reward[i] += rewards[i]
 
-    for agent_id in range(num_agents):
-        avg_actions = [sum(ep)/len(ep) for ep in agent_actions_per_episode[agent_id]]
-        plt.plot(avg_actions, label=f"Agent {agent_id}", linewidth=2)
+                obs = next_obs
 
-    plt.xlabel("Episode")
-    plt.ylabel("Average Action (0–1)")
-    plt.title("Average Extraction Fraction per Agent per Episode")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
+            # End of episode: PPO update 
+            for i in self.agents:
+                self.agents[i].finish_episode()
+                self.agent_rewards[i].append(episode_reward[i])
+                self.agent_actions[i].append(episode_actions[i])
+
+            final_resource = self.env.resource
+            self.resource_over_episodes.append(final_resource)
+            self.delta_R_per_episode.append(final_resource - start_resource)
+            self.total_reward_over_episodes.append(sum(episode_reward.values()))
+
+            print(f"Episode {ep} | Total Reward: {sum(episode_reward.values()):.2f} | Resource: {final_resource:.2f}")
+
+    # PLOTTING HELPERS
+
+    def plot_resources(self):
+        plt.figure(figsize=(8, 4))
+        plt.plot(self.resource_over_episodes, color="green", label="Resource")
+        plt.xlabel("Episode")
+        plt.ylabel("Resource Level")
+        plt.title("Resource Over Episodes")
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
+    def plot_rewards(self):
+        plt.figure(figsize=(10, 5))
+        for i in range(self.num_agents):
+            plt.plot(self.agent_rewards[i], label=f"Agent {i}")
+        plt.xlabel("Episode")
+        plt.ylabel("Reward")
+        plt.title("Per-Agent Episode Rewards")
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
+    def plot_delta_R(self):
+        plt.figure(figsize=(8, 4))
+        plt.plot(self.delta_R_per_episode, color="purple")
+        plt.xlabel("Episode")
+        plt.ylabel("ΔR")
+        plt.title("Resource Change Per Episode")
+        plt.grid(True)
+        plt.show()
+
+    def plot_average_actions(self):
+        plt.figure(figsize=(10, 5))
+        for i in range(self.num_agents):
+            avg_a = [np.mean(ep) for ep in self.agent_actions[i]]
+            plt.plot(avg_a, label=f"Agent {i}")
+        plt.xlabel("Episode")
+        plt.ylabel("Avg Action")
+        plt.title("Average Extraction Per Agent")
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
+    def plot_action_correlation(self):
+        data = np.array([[np.mean(ep) for ep in self.agent_actions[i]] for i in range(self.num_agents)])
+
+        plt.figure(figsize=(6, 5))
+        plt.imshow(np.corrcoef(data), cmap="viridis")
+        plt.colorbar(label="Correlation")
+        plt.title("Agent Action Correlation")
+        plt.xticks(range(self.num_agents), [f"A{i}" for i in range(self.num_agents)])
+        plt.yticks(range(self.num_agents), [f"A{i}" for i in range(self.num_agents)])
+        plt.show()
+
+    def plot_total_reward(self):
+        plt.figure(figsize=(8, 4))
+        plt.plot(self.total_reward_over_episodes, color="blue", label="Total Reward")
+        plt.xlabel("Episode")
+        plt.ylabel("Total Reward (sum over agents)")
+        plt.title("Total Reward Across Episodes")
+        plt.grid(True)
+        plt.legend()
+        plt.show()    
+
+
+# MAIN ENTRY POINT
 
 if __name__ == "__main__":
-    resource_over_episodes, agent_reward_per_episode, delta_R_per_episode, agent_actions_per_episode = trainPpo()
-    plot_resource_pool(resource_over_episodes)
-    plot_reward_per_agent(agent_reward_per_episode)
-    plot_delta_resource(delta_R_per_episode)
-    plot_average_extraction(agent_actions_per_episode)
-    plot_agent_correlation(agent_actions_per_episode)
-    plot_reward_histograms(agent_reward_per_episode)
+    trainer = CommonsTrainer(DEFAULT_CONFIG)
+    trainer.train()
+
+    trainer.plot_resources()
+    trainer.plot_rewards()
+    trainer.plot_delta_R()
+    trainer.plot_average_actions()
+    trainer.plot_action_correlation()
+    trainer.plot_total_reward()
