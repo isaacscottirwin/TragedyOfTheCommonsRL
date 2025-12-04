@@ -7,20 +7,22 @@ class TocEnv:
       - One RL agent
       - K non-agents
       - Random turn order each step
-      - Agent sees only: resource and non-agent takes BEFORE it acts
-      - Regeneration occurs after each step
-      - Discrete action = index selecting fraction of max_agent_take
+      - observation vector [current_resource, num_agents_before, total_agents]
+      - Logistic regeneration
+      - Reward:
+            +1 survive step
+            -1 collapse or starvation
     """
 
     def __init__(
         self,
-        K=3,
+        K=6,
         resource_max=100,
-        regen_rate=1.2,
+        regen_rate=0.25,
         max_agent_take=5,
-        max_nonagent_take=3,
-        survival_min_take=1,
-        num_actions=5,
+        max_nonagent_take=3.5,
+        survival_min_take=1.0,
+        num_actions=6,
     ):
 
         self.K = K
@@ -40,7 +42,7 @@ class TocEnv:
 
     def reset(self):
         self.resource = float(self.resource_max)
-        self.prev_nonagent_takes = []
+        self.num_before = 0
         return self._get_obs()
 
     def _action(self, action_index):
@@ -73,23 +75,22 @@ class TocEnv:
         """
         action_index: integer 0 .. num_actions-1
         """
-
         # random order
         order = list(range(self.K + 1))
         np.random.shuffle(order)
 
         # visible non-agent takes (before agent acts)
-        self.prev_nonagent_takes = []
+        self.num_before = 0
 
         # process non-agents before agent
         for p in order:
             if p == self.K:
-                break
+                break # agents turn
 
             take = float(np.random.uniform(0, self.max_nonagent_take))
-            self.prev_nonagent_takes.append(take)
+            self.resource = max(0.0, self.resource - take)
+            self.num_before += 1
 
-            self.resource -= take
             if self.resource <= 0:
                 reward, done = self._reward()
                 return self._end_step(reward, done)
@@ -97,7 +98,7 @@ class TocEnv:
         # agent acts
         action = self._action(action_index)
 
-        self.resource -= action
+        self.resource = max(0.0, self.resource - action)
         if self.resource <= 0:
             reward , done = self._reward(agent_action=action)
             return self._end_step(reward, done)
@@ -110,16 +111,14 @@ class TocEnv:
                 continue
             if after_agent:
                 take = float(np.random.uniform(0, self.max_nonagent_take))
-                self.resource -= take
+                self.resource = max(0.0, self.resource - take)
                 if self.resource <= 0:
                     reward, done = self._reward()
                     return self._end_step(reward, done)
 
         # regenerate resource (simple)
         growth = self.logistic_regen()
-        self.resource += growth
-        if self.resource > self.resource_max:
-            self.resource = self.resource_max
+        self.resource = min(self.resource_max, max(0.0, self.resource + growth))
 
         # final reward
         reward, done = self._reward(agent_action=action)
@@ -129,7 +128,7 @@ class TocEnv:
         return self._get_obs(), reward, done
 
     def _get_obs(self):
-        return [self.resource] + self.prev_nonagent_takes.copy()
+        return [self.resource, self.num_before]
 
     def render(self):
         print(f"Resource={self.resource:.2f}, visible takes={self.prev_nonagent_takes}")
