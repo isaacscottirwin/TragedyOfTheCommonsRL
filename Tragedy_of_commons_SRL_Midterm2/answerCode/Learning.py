@@ -1,7 +1,7 @@
 import numpy as np
 from collections import defaultdict
 
-def discretize_state(obs, env, num_buckets = 10):
+def discretize_state(obs, env, num_buckets = 15):
     """
     Convert continuous observation into a discrete state tuple.
     Ex: if number of buckets is 10 and current resource level is 87.5 
