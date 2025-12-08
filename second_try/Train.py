@@ -32,7 +32,7 @@ DEFAULT_CONFIG = {
     "train_iters": 5,
 
     # Training settings
-    "num_episodes": 1500
+    "num_episodes": 300
 }
 
 CONFIG_MODE_BOOM_BUST = {

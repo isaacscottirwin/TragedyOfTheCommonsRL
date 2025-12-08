@@ -113,12 +113,18 @@ class CommonsEnv:
 
     def _logistic_growth(self, total_taken):
         """ logistic growth with harvesting."""
-        self.resource = (
-            self.resource
-            + self.resource_regen_rate * self.resource * (1 - self.resource / self.resource_max)
-            - total_taken
-        )
-        self.resource = np.clip(self.resource, 0, self.resource_max)
+        # Remove harvested amount
+        R = self.resource - total_taken
+
+        # Prevent negative values before growth is applied
+        R = max(R, 0.0)
+
+        # Logistic growth applied to post-harvest population
+        growth = self.resource_regen_rate * R * (1 - R / self.resource_max)
+        R = R + growth
+
+        #  Enforce physical bounds
+        self.resource = np.clip(R, 0, self.resource_max)
 
     def step(self, actions):
         """
