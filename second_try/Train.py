@@ -32,14 +32,161 @@ DEFAULT_CONFIG = {
     "train_iters": 5,
 
     # Training settings
+    "num_episodes": 1500
+}
+
+CONFIG_MODE_BOOM_BUST = {
+    "num_agents": 5,
+    "resource_max": 300,
+    "resource_regen_rate": 0.20,   # VERY high regen
+    "max_extract": 6.0,            # agents can overharvest instantly
+    "min_extract": 0.5,
+    "max_steps": 200,
+    "collapse_penalty": 30.0,
+    "penalty_ramp_episodes": 50,
+    "penalty_scale": 0.6,
+    "scale_bonus": 30,
+
+    "learning_rate": 5e-4,
+    "gamma": 0.99,
+    "lambda": 0.95,
+    "clip_eps": 0.2,
+    "train_iters": 5,
     "num_episodes": 300
+}
+
+CONFIG_MODE_HARSH = {
+    "num_agents": 5,
+    "resource_max": 200,
+    "resource_regen_rate": 0.04,   # very slow growth
+    "max_extract": 3.0,
+    "min_extract": 2.0,
+    "max_steps": 700,
+    "collapse_penalty": 100.0,     # falling below 1.0 is extremely costly
+    "penalty_ramp_episodes": 600,  # agents learn slowly at first
+    "penalty_scale": 1.0,
+    "scale_bonus": 60,
+
+    "learning_rate": 3e-4,
+    "gamma": 0.9995,                # longer-term credit assignment
+    "lambda": 0.97,
+    "clip_eps": 0.15,
+    "train_iters": 3,
+    "num_episodes": 300
+}
+
+CONFIG_MODE_SHAPED = {
+    "num_agents": 5,
+    "resource_max": 300,
+    "resource_regen_rate": 0.10,
+    "max_extract": 4.0,
+    "min_extract": 0.0,
+    "max_steps": 250,
+    "collapse_penalty": 30.0,
+    "penalty_ramp_episodes": 30,
+    "penalty_scale": 1.0,
+    "scale_bonus": 80,     # strong horizon incentive
+
+    "learning_rate": 5e-4,
+    "gamma": 0.99,
+    "lambda": 0.95,
+    "clip_eps": 0.2,
+    "train_iters": 5,
+    "num_episodes": 2500
+}
+
+CONFIG_MODE_CHAOS = {
+    "num_agents": 5,
+    "resource_max": 300,
+    "resource_regen_rate": 0.12,
+    "max_extract": 4.0,
+    "min_extract": 0.3,
+    "max_steps": 200,
+    "collapse_penalty": 40.0,
+    "penalty_ramp_episodes": 100,
+    "penalty_scale": 0.8,
+    "scale_bonus": 40,
+
+    "learning_rate": 1e-3,     # too high
+    "gamma": 0.99,
+    "lambda": 0.95,
+    "clip_eps": 0.3,           # too permissive
+    "train_iters": 40,         # over-updating
+    "num_episodes": 300
+}
+
+CONFIG_MODE_SLOW = {
+    "num_agents": 5,
+    "resource_max": 300,
+    "resource_regen_rate": 0.12,
+    "max_extract": 4.0,
+    "min_extract": 0.3,
+    "max_steps": 1000,
+    "collapse_penalty": 40.0,
+    "penalty_ramp_episodes": 100,
+    "penalty_scale": 0.8,
+    "scale_bonus": 40,
+
+    "learning_rate": 1e-4,   # slow learning
+    "gamma": 0.98,
+    "lambda": 0.95,
+    "clip_eps": 0.1,        # tiny updates
+    "train_iters": 3,
+    "num_episodes": 300
+}
+
+CONFIG_MODE_GREED = {
+    "num_agents": 5,
+    "resource_max": 300,
+    "resource_regen_rate": 0.10,
+    "max_extract": 5.0,
+    "min_extract": 0.0,
+    "max_steps": 200,
+    "collapse_penalty": 0.0,    # no penalty
+    "penalty_ramp_episodes": 0,
+    "penalty_scale": 0.0,
+    "scale_bonus": 0.0,         # no horizon reward
+
+    "learning_rate": 5e-4,
+    "gamma": 0.99,
+    "lambda": 0.95,
+    "clip_eps": 0.2,
+    "train_iters": 5,
+    "num_episodes": 200
+}
+
+CONFIG_MODE_ULTRA_STABLE = {
+    "num_agents": 5,
+
+    # Environment parameters
+    "resource_max": 300,
+    "resource_regen_rate": 0.10,   # strong enough growth for recovery, not too high
+    "max_extract": 3.0,           # lower aggressiveness → fewer collapses
+    "min_extract": 0.3,
+    "max_steps": 250,
+
+    "collapse_penalty": 80.0,     # strong discouragement
+    "penalty_ramp_episodes": 200, # very slow ramp → early exploration, late stability
+    "penalty_scale": 1.0,
+
+    "scale_bonus": 100,           # VERY strong horizon reward → pushes sustainability
+
+    # PPO parameters
+    "learning_rate": 3e-4,        # slightly lower → smoother updates
+    "gamma": 0.995,               # longer-term focus, but not extreme
+    "lambda": 0.97,
+    "clip_eps": 0.15,             # tighter constraint → avoids policy blowups
+    "train_iters": 4,             # lower than 5 → prevents oscillatory over-updating
+
+    # Training settings
+    "num_episodes": 2000
 }
 
 
 
 # TRAINER CLASS
 class CommonsTrainer:
-    def __init__(self, config=DEFAULT_CONFIG):
+    def __init__(self, config=CONFIG_MODE_GREED):
         self.config = config
         self.num_agents = config["num_agents"]
 
@@ -207,6 +354,7 @@ class CommonsTrainer:
 # MAIN ENTRY POINT
 
 if __name__ == "__main__":
+    # Switch config here to control number of agents/behavior profile
     trainer = CommonsTrainer(DEFAULT_CONFIG)
     trainer.train()
 
