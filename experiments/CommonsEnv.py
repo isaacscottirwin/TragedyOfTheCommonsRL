@@ -61,7 +61,7 @@ class CommonsEnv:
     
     def step(self, actions):
 
-        # Convert actions 0-1 → extraction amount
+        # Convert actions 0-1 -> extraction amount
         actions = {i: float(np.clip(actions[i], 0, 1)) * self.max_extract
                 for i in actions}
 

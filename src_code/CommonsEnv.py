@@ -7,7 +7,7 @@ class CommonsEnv:
     - Extraction-based per-agent reward
     - Derivative-based shaping (changeR)
     - Observation = [R_norm, changeR, previous_action_i]
-    - Asymmetric collapse penalty (worst offender punished most)
+    - Asymmetric collapse penalty (worst offender penalized most)
     """
 
     def __init__(self, num_agents=5, resource_max=100, resource_regen_rate=0.05,
@@ -27,7 +27,7 @@ class CommonsEnv:
         self.penalty_scale = penalty_scale
         self.scale_bonus = scale_bonus
 
-        # For derivative shaping
+        # For derivative penalty
         self.prev_resource = None
 
         # Per-agent previous actions (stored in [0,1])
@@ -65,7 +65,6 @@ class CommonsEnv:
 
         return np.array([normalized_R, delta_R, prev_a], dtype=np.float32)
 
-    # ---------------------------------------------------------
     def _reward(self, actions, old_resource):
         """
         Compute per-agent rewards after the resource has been updated.
@@ -84,7 +83,7 @@ class CommonsEnv:
         delta_R = self.resource - old_resource
 
         if delta_R < 0:
-            # Penalize resource decline (more negative if ΔR is more negative)
+            # Penalize resource decline (more negative if delta_R is more negative)
             for i in rewards:
                 rewards[i] += 3.0 * delta_R
         else:
@@ -98,7 +97,7 @@ class CommonsEnv:
             # Identify the biggest extractor this step
             offender = max(actions, key=lambda k: actions[k])
 
-            # Offender gets 2× penalty; others get 1× penalty
+            # Offender gets 2x penalty; others get 1x penalty
             rewards = {
                 i: (
                     -2.0 * self.penalty_scale * self.collapse_penalty
@@ -119,11 +118,11 @@ class CommonsEnv:
         # Prevent negative values before growth is applied
         R = max(R, 0.0)
 
-        # Logistic growth applied to post-harvest population
+        # Logistic growth formula
         growth = self.resource_regen_rate * R * (1 - R / self.resource_max)
         R = R + growth
 
-        #  Enforce physical bounds
+        # make sure resource is within bounds
         self.resource = np.clip(R, 0, self.resource_max)
 
     def step(self, actions):
@@ -132,7 +131,7 @@ class CommonsEnv:
 
         actions: dict {agent_id: scalar in [0,1]} (normalized extraction fraction)
         """
-        # Convert normalized [0,1] → actual extraction amount
+        # Convert normalized [0,1] -> actual extraction amount
         actions = {
             i: float(np.clip(actions[i], 0, 1)) * self.max_extract
             for i in actions

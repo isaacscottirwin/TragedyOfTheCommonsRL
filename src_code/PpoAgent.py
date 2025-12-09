@@ -62,25 +62,25 @@ class PpoAgent:
         reward = np.array(self.reward_buf, dtype=np.float32)
         done = np.array(self.done_buf, dtype=np.float32)
 
-        # returns: Monte-Carlo returns G_t = r_t + γ r_{t+1} + γ^2 r_{t+2} + ...
+        # returns: Monte-Carlo returns G_t = r_t + gamma r_{t+1} + gamma^2 r_{t+2} + ...
         returns = []
 
-        # adv: Advantage estimates Â_t, computed using GAE (Generalized Advantage Estimation)
+        # adv: Advantage estimates A_t, computed using GAE (Generalized Advantage Estimation)
         #      Tells PPO how much better/worse an action was compared to baseline V(s)
         adv = []
 
-        # gae: Running GAE accumulator (λ-discounted TD-residual smoothing)
-        #      gae_t = δ_t + γλ * gae_{t+1}
+        # gae: Running GAE accumulator (lambda-discounted TD-residual smoothing)
+        #      gae_t = delta_t + gamma*lambda * gae_{t+1}
         #      This reduces variance vs pure returns, but keeps bias low.
         gae = 0.0
 
         # G: Running Monte-Carlo return accumulator
-        #    G_t = r_t + γ * G_{t+1}
+        #    G_t = r_t + gamma * G_{t+1}
         #    Used as the regression target for the critic V(s)
         G = 0.0
 
         # next_val: V(s_{t+1}) used in TD residual
-        #           Reset to 0 when hitting done=True (terminal state)
+        #    Reset to 0 when hitting done =True (terminal state)
         next_val = 0.0
 
         for t in reversed(range(len(reward))):
@@ -102,7 +102,7 @@ class PpoAgent:
 
         adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
-        # --- PPO update ---
+        # PPO update 
         entropy_coef = 0.01
 
         for _ in range(self.train_iters):

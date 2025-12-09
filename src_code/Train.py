@@ -21,7 +21,7 @@ DEFAULT_CONFIG = {
     "collapse_penalty": 40.0,
     "penalty_ramp_episodes": 100,
     "penalty_scale": 0.8,
-    # Modest end-of-episode bonus
+    # end-of-episode bonus
     "scale_bonus": 40,
 
     # PPO params
@@ -161,22 +161,22 @@ CONFIG_MODE_ULTRA_STABLE = {
     # Environment parameters
     "resource_max": 300,
     "resource_regen_rate": 0.10,   # strong enough growth for recovery, not too high
-    "max_extract": 3.0,           # lower aggressiveness → fewer collapses
+    "max_extract": 3.0,           # lower aggressiveness -> fewer collapses
     "min_extract": 0.3,
     "max_steps": 250,
 
     "collapse_penalty": 80.0,     # strong discouragement
-    "penalty_ramp_episodes": 200, # very slow ramp → early exploration, late stability
+    "penalty_ramp_episodes": 200, # very slow ramp -> early exploration, late stability
     "penalty_scale": 1.0,
 
-    "scale_bonus": 100,           # VERY strong horizon reward → pushes sustainability
+    "scale_bonus": 100,           # VERY strong horizon reward -> pushes sustainability
 
     # PPO parameters
-    "learning_rate": 3e-4,        # slightly lower → smoother updates
+    "learning_rate": 3e-4,        # slightly lower -> smoother updates
     "gamma": 0.995,               # longer-term focus, but not extreme
     "lambda": 0.97,
-    "clip_eps": 0.15,             # tighter constraint → avoids policy blowups
-    "train_iters": 4,             # lower than 5 → prevents oscillatory over-updating
+    "clip_eps": 0.15,             # tighter constraint -> avoids policy blowups
+    "train_iters": 4,             # lower than 5 -> prevents oscillatory over-updating
 
     # Training settings
     "num_episodes": 2000
@@ -285,7 +285,7 @@ class CommonsTrainer:
 
             print(f"Episode {ep} | Total Reward: {sum(episode_reward.values()):.2f} | Resource: {final_resource:.2f}")
 
-    # PLOTTING HELPERS
+    # plots
 
     def plot_resources(self):
         plt.figure(figsize=(8, 4))
@@ -351,7 +351,6 @@ class CommonsTrainer:
         plt.show()    
 
 
-# MAIN ENTRY POINT
 
 if __name__ == "__main__":
     # Switch config here to control number of agents/behavior profile

@@ -73,11 +73,9 @@ class Sarsa:
                 state = next_state
                 action = next_action
 
-            # anneal epsilon
             self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
             self.rewards_per_episode.append(total_reward)
-            # Track resource at episode end
             self.resource_per_episode.append(self.env.resource)
 
         return self.q_values, self.rewards_per_episode, self.resource_per_episode
@@ -130,7 +128,6 @@ class Qlearning:
 
                 state = next_state
 
-            # epsilon annealing
             self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
             self.rewards_per_episode.append(total_reward)
