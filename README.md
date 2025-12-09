@@ -96,7 +96,7 @@ Action:
 A continuous scalar in [0,1], scaled to [0, max_extract].
 
 Reward:
-- Extraction reward (penalizes taking too little)
+- Extraction reward. The amount an agent extracts/consumes is the reward they get. Ex. agent 1 takes 3 resources -> agent 1 gets a reward of 3.
 - Derivative shaping reward based on whether the resource is growing
 - Asymmetric collapse penalty: largest extractor is punished most
 - Horizon bonus for maintaining sustainability
